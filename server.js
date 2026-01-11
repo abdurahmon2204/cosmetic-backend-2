@@ -44,8 +44,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // --- 7. Asosiy API Yo'llarini Ulash (Routes) ---
 
 app.use('/api/auth', authRoutes);     // Register / Login
-app.use('/api/products', productRoutes); // Mahsulotlar
-app.use('/api/basket', basketRoutes);   // Savatcha
+// app.use('/api/products', productRoutes); // Mahsulotlar
+// app.use('/api/basket', basketRoutes);   // Savatcha
 
 // -------------------------------------------------------------
 // --- 8. Serverni Ishga Tushirish ---
