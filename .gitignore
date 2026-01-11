@@ -1,0 +1,11 @@
+# Node.js maxsus papkasi
+node_modules/
+
+# Yuklangan rasmlar (Renderda ishlatmaslik uchun)
+uploads/
+
+# Atrof-muhit o'zgaruvchilari (MAXFIY)
+.env
+
+# Ba'zi OS fayllari
+.DS_Store
