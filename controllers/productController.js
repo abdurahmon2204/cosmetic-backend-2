@@ -1,43 +1,51 @@
-// controllers/productController.js
-const Product = require('../models/Product');
+const fs = require('fs');
+const path = require('path');
 
-// @route POST /api/products (Himoyalangan: Faqat login qilgan qo'sha oladi)
-exports.createProduct = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ message: 'Rasm fayli yuklanmadi.' });
-        }
-        
-        const newProduct = await Product.create({
-            ...req.body,
-            imageUrl: `/uploads/${req.file.filename}`, // Rasm manzilini saqlash
+// Hozircha vaqtinchalik ma'lumotlar bazasi (array)
+let products = [];
+
+// 1. Mahsulot qo'shish
+exports.addProduct = (req, res) => {
+    const { name, brand, price, stock } = req.body;
+    
+    const newProduct = {
+        id: Date.now().toString(), // Unikal ID
+        name,
+        brand,
+        price,
+        stock,
+        image: req.file ? req.file.filename : null
+    };
+
+    products.push(newProduct);
+    res.status(201).json({ success: true, data: newProduct });
+};
+
+// 2. Barcha mahsulotlarni ko'rish
+exports.getProducts = (req, res) => {
+    res.json({ success: true, count: products.length, data: products });
+};
+
+// 3. Mahsulotni o'chirish (Rasm bilan birga)
+exports.deleteProduct = (req, res) => {
+    const { id } = req.params;
+    const productIndex = products.findIndex(p => p.id === id);
+
+    if (productIndex === -1) {
+        return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
+    }
+
+    const product = products[productIndex];
+
+    // Rasmni papkadan o'chirish logikasi
+    if (product.image) {
+        const imagePath = path.join(__dirname, '../uploads/', product.image);
+        fs.unlink(imagePath, (err) => {
+            if (err) console.log("Rasmni o'chirishda xato:", err);
         });
-
-        res.status(201).json({ success: true, data: newProduct });
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
     }
-};
 
-// @route GET /api/products
-exports.getAllProducts = async (req, res) => {
-    try {
-        const products = await Product.find();
-        res.status(200).json({ success: true, count: products.length, data: products });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Mahsulotlarni olishda xatolik.' });
-    }
-};
-
-// @route DELETE /api/products/:id (Himoyalangan)
-exports.deleteProduct = async (req, res) => {
-    try {
-        const product = await Product.findByIdAndDelete(req.params.id);
-        if (!product) {
-            return res.status(404).json({ success: false, message: 'Mahsulot topilmadi.' });
-        }
-        res.status(200).json({ success: true, message: 'Mahsulot muvaffaqiyatli oʻchirildi.' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    // Bazadan o'chirish
+    products.splice(productIndex, 1);
+    res.json({ success: true, message: "Mahsulot va uning rasmi o'chirildi" });
 };

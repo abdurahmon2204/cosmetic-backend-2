@@ -1,18 +1,10 @@
-// routes/productRoutes.js
 const express = require('express');
-const { createProduct, getAllProducts, deleteProduct } = require('../controllers/productController');
-const upload = require('../config/multer'); // Multer konfiguratsiyasi
-const { protect } = require('../middleware/auth'); // Himoya middleware'i
-
 const router = express.Router();
+const productController = require('../controllers/productController');
+const upload = require('../middleware/upload');
 
-// Mahsulot qo'shish: Avvalo rasm yuklanadi, keyin controller ishga tushadi. Faqat login qilganlar uchun.
-router.post('/', protect, upload.single('image'), createProduct); 
-
-// Barcha mahsulotlarni olish: Hamma uchun ochiq
-router.get('/', getAllProducts);
-
-// Mahsulotni o'chirish: Faqat login qilganlar uchun
-router.delete('/:id', protect, deleteProduct); 
+router.post('/add', upload.single('image'), productController.addProduct);
+router.get('/all', productController.getProducts);
+router.delete('/delete/:id', productController.deleteProduct); // O'chirish yo'li
 
 module.exports = router;

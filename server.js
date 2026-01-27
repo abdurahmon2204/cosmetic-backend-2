@@ -1,55 +1,56 @@
-// server.js
-
-// -------------------------------------------------------------
-// --- 1. Maxfiy Sozlamalarni Yuklash (ENG BOSHI) ---
-// dotenv paketini chaqirib, .env faylidagi o'zgaruvchilarni yuklaymiz.
-require('dotenv').config({ path: './.env' }); 
-
-// -------------------------------------------------------------
-// --- 2. Kerakli Modullarni Import Qilish ---
-const express = require('express'); // Express eng birinchi import qilinishi shart!
+require('dotenv').config();
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const connectDB = require('./config/db'); 
+const fs = require('fs');
 
-// --- 3. Route Fayllarini Import Qilish ---
+// Papkalarni import qilish (Yo'llar to'g'riligini tekshiring)
 const productRoutes = require('./routes/productRoutes');
-const authRoutes = require('./routes/authRoutes'); 
-const basketRoutes = require('./routes/basketRoutes'); 
+const connectDB = require('./config/db');
 
-// -------------------------------------------------------------
-// --- 4. MongoDB ga Ulanish ---
-connectDB();
-
-// --- 5. Express Ilovasini O'rnatish ---
 const app = express();
-const PORT = process.env.PORT || 3000; 
 
-// -------------------------------------------------------------
-// --- 6. Global Middleware'lar (Tartibi Muhim!) ---
+// 1. Ma'lumotlar bazasiga ulanish (Agar config/db.js tayyor bo'lsa)
+// connectDB(); 
 
-// 6.1. CORS: Boshqa domendan kelgan so'rovlarga ruxsat berish
+// 2. Middleware sozlamalari
 app.use(cors());
+app.use(express.json()); // JSON formatidagi body'ni o'qish uchun
+app.use(express.urlencoded({ extended: true })); // Form-data uchun
 
-// 6.2. Body Parser: JSON formatidagi ma'lumotlarni req.body ga yuklash
-app.use(express.json()); 
+// 3. 'uploads' papkasini tekshirish (Agar yo'q bo'lsa, avtomatik yaratadi)
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
 
-// 6.3. URL-encoded ma'lumotlarni o'qish (agar form-data ishlatilsa)
-app.use(express.urlencoded({ extended: true })); 
+// 4. Static papka (Rasmlarni brauzerda ko'rish uchun)
+// Masalan: http://localhost:5000/uploads/rasm_nomi.jpg
+app.use('/uploads', express.static(uploadDir));
 
-// 6.4. Statik Fayllar uchun Manzil (Rasmlar, etc.)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 5. API Yo'nalishlari (Routes)
+app.use('/api/products', productRoutes);
 
-// -------------------------------------------------------------
-// --- 7. Asosiy API Yo'llarini Ulash (Routes) ---
+// 6. Test uchun asosiy yo'l
+app.get('/', (req, res) => {
+    res.send('Kosmetika do\'koni backend serveri ishlamoqda...');
+});
 
-app.use('/api/auth', authRoutes);     // Register / Login
-// app.use('/api/products', productRoutes); // Mahsulotlar
-// app.use('/api/basket', basketRoutes);   // Savatcha
+// 7. Xatoliklarni ushlash (Error Handling)
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        success: false,
+        message: "Serverda ichki xatolik yuz berdi!",
+        error: err.message
+    });
+});
 
-// -------------------------------------------------------------
-// --- 8. Serverni Ishga Tushirish ---
-
+// 8. Serverni yondirish
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server http://localhost:${PORT} portida ishlamoqda.`);
+    console.log(`-------------------------------------------`);
+    console.log(`🚀 Server ${PORT}-portda muvaffaqiyatli yondi`);
+    console.log(`📂 Rasmlar uchun: http://localhost:${PORT}/uploads`);
+    console.log(`-------------------------------------------`);
 });
