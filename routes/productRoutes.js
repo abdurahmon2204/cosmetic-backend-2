@@ -3,8 +3,16 @@ const router = express.Router();
 const productController = require('../controllers/productController');
 const upload = require('../middleware/upload');
 
-router.post('/add', upload.single('image'), productController.addProduct);
+// Barcha mahsulotlarni olish
 router.get('/all', productController.getProducts);
-router.delete('/delete/:id', productController.deleteProduct); 
+
+// Bitta mahsulotni ID bo'yicha olish (ProductDetail uchun)
+router.get('/:id', productController.getSingleProduct);
+
+// Mahsulot qo'shish
+router.post('/add', upload.single('image'), productController.addProduct);
+
+// Mahsulotni o'chirish
+router.delete('/delete/:id', productController.deleteProduct);
 
 module.exports = router;
