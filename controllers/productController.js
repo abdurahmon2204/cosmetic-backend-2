@@ -1,22 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
-// Hozircha vaqtinchalik ma'lumotlar bazasi (array)
+// Vaqtinchalik xotira
 let products = [];
 
 // 1. Mahsulot qo'shish
 exports.addProduct = (req, res) => {
     try {
-        const { name, brand, price, stock } = req.body;
+        const { name, brand, price, description } = req.body;
         
+        // Majburiy maydonlarni tekshirish
         if (!name || !price) {
             return res.status(400).json({ success: false, message: "Nom va narx majburiy!" });
         }
 
         const newProduct = {
-            id: Date.now().toString(), // Unikal ID
+            id: Date.now().toString(),
             name,
-            description: description || "yoq",
+            brand: brand || "Brendsiz",
+            description: description || "Tavsif berilmagan",
             price: price,
             image: req.file ? req.file.filename : null
         };
@@ -33,7 +35,7 @@ exports.getProducts = (req, res) => {
     res.json({ success: true, count: products.length, data: products });
 };
 
-// 3. BITTA MAHSULOTNI OLISH (Frontenddagi Detail sahifasi uchun kerak)
+// 3. Bitta mahsulotni olish
 exports.getSingleProduct = (req, res) => {
     const { id } = req.params;
     const product = products.find(p => p.id === id);
@@ -45,7 +47,7 @@ exports.getSingleProduct = (req, res) => {
     res.json({ success: true, data: product });
 };
 
-// 4. Mahsulotni o'chirish (Rasm bilan birga)
+// 4. Mahsulotni o'chirish
 exports.deleteProduct = (req, res) => {
     const { id } = req.params;
     const productIndex = products.findIndex(p => p.id === id);
@@ -56,18 +58,16 @@ exports.deleteProduct = (req, res) => {
 
     const product = products[productIndex];
 
-    // Rasmni papkadan o'chirish logikasi
+    // Rasmni papkadan o'chirish
     if (product.image) {
         const imagePath = path.join(__dirname, '../uploads/', product.image);
-        // Fayl mavjudligini tekshirib keyin o'chirish
         if (fs.existsSync(imagePath)) {
             fs.unlink(imagePath, (err) => {
-                if (err) console.error("Rasmni fayl tizimidan o'chirishda xato:", err);
+                if (err) console.error("Rasm o'chirishda xato:", err);
             });
         }
     }
 
-    // Arraydan o'chirish
     products.splice(productIndex, 1);
-    res.json({ success: true, message: "Mahsulot va uning rasmi o'chirildi" });
+    res.json({ success: true, message: "Mahsulot muvaffaqiyatli o'chirildi" });
 };
