@@ -16,9 +16,8 @@ exports.addProduct = (req, res) => {
         const newProduct = {
             id: Date.now().toString(), // Unikal ID
             name,
-            brand: brand || "Noma'lum",
+            description: description || "yoq",
             price: price,
-            stock: stock || 0,
             image: req.file ? req.file.filename : null
         };
 
