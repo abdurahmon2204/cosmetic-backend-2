@@ -1,73 +1,93 @@
-const fs = require('fs');
-const path = require('path');
+const Product = require('../models/Product');
+const admin = require('firebase-admin');
 
-// Vaqtinchalik xotira
-let products = [];
-
-// 1. Mahsulot qo'shish
-exports.addProduct = (req, res) => {
+// 1. Yangi mahsulot qo'shish
+exports.addProduct = async (req, res) => {
     try {
-        const { name, brand, price, description } = req.body;
-        
-        // Majburiy maydonlarni tekshirish
-        if (!name || !price) {
-            return res.status(400).json({ success: false, message: "Nom va narx majburiy!" });
+        // Firebase bucketni funksiya ichida chaqiramiz
+        const bucket = admin.storage().bucket();
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Rasm yuklanmadi!" });
         }
 
-        const newProduct = {
-            id: Date.now().toString(),
-            name,
-            brand: brand || "Brendsiz",
-            description: description || "Tavsif berilmagan",
-            price: price,
-            image: req.file ? req.file.filename : null
-        };
+        // Firebase uchun file nomi
+        const fileName = `products/${Date.now()}_${req.file.originalname}`;
+        const fileUpload = bucket.file(fileName);
 
-        products.push(newProduct);
-        res.status(201).json({ success: true, data: newProduct });
+        const stream = fileUpload.createWriteStream({
+            metadata: { contentType: req.file.mimetype }
+        });
+
+        stream.on('error', (error) => {
+            res.status(500).json({ success: false, message: "Firebase xatosi: " + error.message });
+        });
+
+        stream.on('finish', async () => {
+            // Rasmni internetda ko'rinadigan qilish
+            await fileUpload.makePublic();
+            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
+
+            // MongoDB-ga saqlash
+            const newProduct = new Product({
+                name: req.body.name,
+                price: req.body.price,
+                description: req.body.description,
+                image: imageUrl // Firebase linki
+            });
+
+            await newProduct.save();
+            res.status(201).json({ success: true, product: newProduct });
+        });
+
+        stream.end(req.file.buffer);
+
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 2. Barcha mahsulotlarni ko'rish
-exports.getProducts = (req, res) => {
-    res.json({ success: true, count: products.length, data: products });
+// 2. Barcha mahsulotlarni olish
+exports.getProducts = async (req, res) => {
+    try {
+        const products = await Product.find().sort({ createdAt: -1 });
+        res.status(200).json(products);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
 // 3. Bitta mahsulotni olish
-exports.getSingleProduct = (req, res) => {
-    const { id } = req.params;
-    const product = products.find(p => p.id === id);
-
-    if (!product) {
-        return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
+exports.getSingleProduct = async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: "Topilmadi" });
+        res.status(200).json(product);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    res.json({ success: true, data: product });
 };
 
 // 4. Mahsulotni o'chirish
-exports.deleteProduct = (req, res) => {
-    const { id } = req.params;
-    const productIndex = products.findIndex(p => p.id === id);
+exports.deleteProduct = async (req, res) => {
+    try {
+        const bucket = admin.storage().bucket(); // Funksiya ichida chaqiramiz
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: "Mahsulot topilmadi" });
 
-    if (productIndex === -1) {
-        return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
-    }
-
-    const product = products[productIndex];
-
-    // Rasmni papkadan o'chirish
-    if (product.image) {
-        const imagePath = path.join(__dirname, '../uploads/', product.image);
-        if (fs.existsSync(imagePath)) {
-            fs.unlink(imagePath, (err) => {
-                if (err) console.error("Rasm o'chirishda xato:", err);
-            });
+        // Firebase-dan rasmni o'chirish
+        const fileUrl = product.image;
+        if (fileUrl) {
+            // URL ichidan fayl nomini ajratib olish
+            const fileName = fileUrl.split(`${bucket.name}/`)[1];
+            if (fileName) {
+                await bucket.file(fileName).delete().catch(e => console.log("Rasm o'chmadi:", e.message));
+            }
         }
-    }
 
-    products.splice(productIndex, 1);
-    res.json({ success: true, message: "Mahsulot muvaffaqiyatli o'chirildi" });
+        await Product.findByIdAndDelete(req.params.id);
+        res.status(200).json({ success: true, message: "O'chirildi!" });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };

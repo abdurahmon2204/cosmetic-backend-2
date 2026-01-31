@@ -1,18 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
-const upload = require('../middleware/upload');
+const upload = require('../middleware/upload'); // RAMda ushlab turuvchi multer sozlamasi
 
-// Barcha mahsulotlarni olish
+/**
+ * @route   GET /api/products/all
+ * @desc    Barcha mahsulotlarni bazadan olish
+ */
 router.get('/all', productController.getProducts);
 
-// Bitta mahsulotni ID bo'yicha olish (ProductDetail uchun)
+/**
+ * @route   GET /api/products/:id
+ * @desc    Bitta mahsulotni ID bo'yicha olish (Batafsil sahifa uchun)
+ */
 router.get('/:id', productController.getSingleProduct);
 
-// Mahsulot qo'shish
+/**
+ * @route   POST /api/products/add
+ * @desc    Yangi mahsulot qo'shish (Rasm Firebase-ga, ma'lumotlar MongoDB-ga)
+ * @access  Public (yoki Admin, agar token bo'lsa)
+ */
 router.post('/add', upload.single('image'), productController.addProduct);
 
-// Mahsulotni o'chirish
+/**
+ * @route   DELETE /api/products/delete/:id
+ * @desc    Mahsulotni o'chirish (Firebase-dagi rasmi bilan birga)
+ */
 router.delete('/delete/:id', productController.deleteProduct);
 
 module.exports = router;
