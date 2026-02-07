@@ -1,17 +1,31 @@
 const Product = require('../models/Product');
 const admin = require('firebase-admin');
 
+// --- FIREBASE INITIALIZATION (Xatoni tuzatadigan qism) ---
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            // Renderdagi \n muammosini hal qiluvchi kod:
+            privateKey: process.env.FIREBASE_PRIVATE_KEY 
+                ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+                : undefined,
+        }),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+}
+// --------------------------------------------------------
+
 // 1. Yangi mahsulot qo'shish
 exports.addProduct = async (req, res) => {
     try {
-        // Firebase bucketni funksiya ichida chaqiramiz
         const bucket = admin.storage().bucket();
 
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Rasm yuklanmadi!" });
         }
 
-        // Firebase uchun file nomi
         const fileName = `products/${Date.now()}_${req.file.originalname}`;
         const fileUpload = bucket.file(fileName);
 
@@ -19,25 +33,34 @@ exports.addProduct = async (req, res) => {
             metadata: { contentType: req.file.mimetype }
         });
 
+        // Xatolikni ushlash uchun 'error' hodisasi
         stream.on('error', (error) => {
-            res.status(500).json({ success: false, message: "Firebase xatosi: " + error.message });
+            console.error("Firebase Upload Error:", error);
+            if (!res.headersSent) {
+                return res.status(500).json({ success: false, message: "Firebase xatosi: " + error.message });
+            }
         });
 
+        // Yuklash yakunlanganda
         stream.on('finish', async () => {
-            // Rasmni internetda ko'rinadigan qilish
-            await fileUpload.makePublic();
-            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
+            try {
+                // Rasmni ochiq (public) qilish
+                await fileUpload.makePublic();
+                const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
 
-            // MongoDB-ga saqlash
-            const newProduct = new Product({
-                name: req.body.name,
-                price: req.body.price,
-                description: req.body.description,
-                image: imageUrl // Firebase linki
-            });
+                // MongoDB-ga saqlash
+                const newProduct = new Product({
+                    name: req.body.name,
+                    price: req.body.price,
+                    description: req.body.description,
+                    image: imageUrl
+                });
 
-            await newProduct.save();
-            res.status(201).json({ success: true, product: newProduct });
+                await newProduct.save();
+                res.status(201).json({ success: true, product: newProduct });
+            } catch (err) {
+                res.status(500).json({ success: false, message: "DB saqlashda xato: " + err.message });
+            }
         });
 
         stream.end(req.file.buffer);
@@ -71,17 +94,16 @@ exports.getSingleProduct = async (req, res) => {
 // 4. Mahsulotni o'chirish
 exports.deleteProduct = async (req, res) => {
     try {
-        const bucket = admin.storage().bucket(); // Funksiya ichida chaqiramiz
+        const bucket = admin.storage().bucket();
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: "Mahsulot topilmadi" });
 
-        // Firebase-dan rasmni o'chirish
-        const fileUrl = product.image;
-        if (fileUrl) {
-            // URL ichidan fayl nomini ajratib olish
-            const fileName = fileUrl.split(`${bucket.name}/`)[1];
-            if (fileName) {
-                await bucket.file(fileName).delete().catch(e => console.log("Rasm o'chmadi:", e.message));
+        if (product.image) {
+            // URL ichidan fayl nomini to'g'ri ajratib olish (yaxshilangan variant)
+            const parts = product.image.split(`${bucket.name}/`);
+            if (parts.length > 1) {
+                const fileName = parts[1];
+                await bucket.file(fileName).delete().catch(e => console.log("Rasm Firebase'da topilmadi, o'chirib bo'lmadi."));
             }
         }
 

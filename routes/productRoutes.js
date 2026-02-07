@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
-const upload = require('../middleware/upload'); // RAMda ushlab turuvchi multer sozlamasi
+const upload = require('../middleware/upload'); 
 
 /**
  * @route   GET /api/products/all
@@ -11,14 +11,14 @@ router.get('/all', productController.getProducts);
 
 /**
  * @route   GET /api/products/:id
- * @desc    Bitta mahsulotni ID bo'yicha olish (Batafsil sahifa uchun)
+ * @desc    Bitta mahsulotni ID bo'yicha olish
  */
 router.get('/:id', productController.getSingleProduct);
 
 /**
  * @route   POST /api/products/add
- * @desc    Yangi mahsulot qo'shish (Rasm Firebase-ga, ma'lumotlar MongoDB-ga)
- * @access  Public (yoki Admin, agar token bo'lsa)
+ * @desc    Yangi mahsulot qo'shish (Multer orqali rasm tutiladi)
+ * @access  Public
  */
 router.post('/add', upload.single('image'), productController.addProduct);
 

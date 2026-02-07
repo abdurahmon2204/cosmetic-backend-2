@@ -1,19 +1,26 @@
 const multer = require('multer');
 
-// Rasmni vaqtincha RAMda ushlab turish
+// 1. Rasmni vaqtincha RAMda (buffer ko'rinishida) ushlab turish
+// Bu Firebase-ga upload qilish uchun eng qulay usul
 const storage = multer.memoryStorage();
 
+// 2. Faylni tekshirish (Faqat rasm ekanligini aniqlash)
 const fileFilter = (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     } else {
-        cb(new Error('Faqat rasm yuklash mumkin!'), false);
+        // Xato xabarini yuborish
+        cb(new Error('Faqat rasm yuklash mumkin! (jpg, png, jpeg, webp)'), false);
     }
 };
 
+// 3. Multer sozlamalarini birlashtirish
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+    fileFilter: fileFilter, // Tekshiruvchi funksiyani ulaymiz
+    limits: { 
+        fileSize: 5 * 1024 * 1024 // Maksimal 5MB hajmdagi rasm
+    }
 });
 
 module.exports = upload;
