@@ -1,34 +1,20 @@
 const Product = require('../models/Product');
 const admin = require('firebase-admin');
 
-/**
- * FIREBASE INITIALIZATION
- * Render platformasida Private Key xatosi chiqmasligi uchun 
- * .replace() funksiyasidan foydalanilgan.
- */
-if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY 
-                ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
-                : undefined,
-        }),
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-    });
-}
+// Firebase bucket-ni server.js-dagi ulanishdan foydalanib olamiz
+// initializeApp shart emas, chunki u server.js da bajarildi
+const getBucket = () => admin.storage().bucket();
 
-const bucket = admin.storage().bucket();
-
-// 1. Yangi mahsulot qo'shish (Rasm Firebase-ga, Ma'lumotlar MongoDB-ga)
+// 1. Yangi mahsulot qo'shish
 exports.addProduct = async (req, res) => {
     try {
+        const bucket = getBucket();
+
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Rasm yuklanmadi!" });
         }
 
-        // Firebase-ga yuklanadigan fayl nomi va yo'li
+        // Fayl nomi: products papkasi ichiga vaqt tamg'asi bilan saqlaymiz
         const fileName = `products/${Date.now()}_${req.file.originalname}`;
         const fileUpload = bucket.file(fileName);
 
@@ -38,19 +24,17 @@ exports.addProduct = async (req, res) => {
             }
         });
 
-        // Yuklashda xato bo'lsa
         stream.on('error', (error) => {
             console.error("Firebase xatosi:", error);
             return res.status(500).json({ success: false, message: "Firebase xatosi: " + error.message });
         });
 
-        // Yuklash muvaffaqiyatli tugasa
         stream.on('finish', async () => {
             try {
                 // Rasmni hamma ko'rishi uchun ruxsat berish
                 await fileUpload.makePublic();
                 
-                // Rasmni hamma ko'ra oladigan linki (URL)
+                // Rasmni URL manzilini yasash
                 const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
 
                 // MongoDB-ga saqlash
@@ -59,7 +43,7 @@ exports.addProduct = async (req, res) => {
                     price: req.body.price,
                     description: req.body.description,
                     category: req.body.category,
-                    image: imageUrl // Firebase-dan qaytgan link
+                    image: imageUrl
                 });
 
                 await newProduct.save();
@@ -77,7 +61,7 @@ exports.addProduct = async (req, res) => {
     }
 };
 
-// 2. Barcha mahsulotlarni bazadan olish
+// 2. Barcha mahsulotlarni olish
 exports.getProducts = async (req, res) => {
     try {
         const products = await Product.find().sort({ createdAt: -1 });
@@ -100,25 +84,28 @@ exports.getSingleProduct = async (req, res) => {
     }
 };
 
-// 4. Mahsulotni o'chirish (Firebase-dagi rasmi bilan birga)
+// 4. Mahsulotni o'chirish
 exports.deleteProduct = async (req, res) => {
     try {
+        const bucket = getBucket();
         const product = await Product.findById(req.params.id);
+        
         if (!product) {
             return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
         }
 
-        // Firebase-dan rasmni o'chirish
+        // Firebase-dan rasmni o'chirish mantiqi
         if (product.image) {
-            const fileName = product.image.split(`${bucket.name}/`)[1];
-            if (fileName) {
-                await bucket.file(fileName).delete().catch(e => console.log("Rasm o'chirishda xato:", e.message));
+            // URL-dan fayl yo'lini ajratib olish
+            const parts = product.image.split(`${bucket.name}/`);
+            if (parts.length > 1) {
+                const fileName = parts[1];
+                await bucket.file(fileName).delete().catch(e => console.log("Firebase rasm topilmadi:", e.message));
             }
         }
 
-        // MongoDB-dan o'chirish
         await Product.findByIdAndDelete(req.params.id);
-        res.status(200).json({ success: true, message: "Mahsulot va uning rasmi muvaffaqiyatli o'chirildi" });
+        res.status(200).json({ success: true, message: "O'chirildi!" });
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
