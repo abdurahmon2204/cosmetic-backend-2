@@ -1,11 +1,12 @@
 const multer = require('multer');
 
 // 1. Rasmni vaqtincha RAMda (buffer ko'rinishida) ushlab turish
-// Bu Firebase-ga upload qilish uchun eng qulay usul
+// ImgBB API-ga yuborish uchun aynan shu usul kerak
 const storage = multer.memoryStorage();
 
 // 2. Faylni tekshirish (Faqat rasm ekanligini aniqlash)
 const fileFilter = (req, file, cb) => {
+    // Rasm formatlarini tekshirish
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     } else {
@@ -17,9 +18,9 @@ const fileFilter = (req, file, cb) => {
 // 3. Multer sozlamalarini birlashtirish
 const upload = multer({ 
     storage: storage,
-    fileFilter: fileFilter, // Tekshiruvchi funksiyani ulaymiz
+    fileFilter: fileFilter, 
     limits: { 
-        fileSize: 5 * 1024 * 1024 // Maksimal 5MB hajmdagi rasm
+        fileSize: 32 * 1024 * 1024 // ImgBB bepul versiyasi 32MB gacha ruxsat beradi
     }
 });
 

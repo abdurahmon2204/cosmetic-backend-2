@@ -1,61 +1,51 @@
 const Product = require('../models/Product');
-const admin = require('firebase-admin');
+const axios = require('axios');
+const FormData = require('form-data');
 
-// DIQQAT: Bu yerda initializeApp() bo'lmasligi shart!
-// Shunchaki mavjud ulanishdan bucket-ni olamiz
-const getBucket = () => {
-    if (admin.apps.length === 0) {
-        console.error("❌ Firebase hali ishga tushmagan!");
-        return null;
-    }
-    return admin.storage().bucket();
-};
-
-// 1. Yangi mahsulot qo'shish
+// 1. Yangi mahsulot qo'shish (ImgBB orqali)
 exports.addProduct = async (req, res) => {
     try {
-        const bucket = getBucket();
-        if (!bucket) return res.status(500).json({ success: false, message: "Firebase xatosi!" });
-
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Rasm yuklanmadi!" });
         }
 
-        const fileName = `products/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-        const fileUpload = bucket.file(fileName);
+        // ImgBB API kalitini tekshirish
+        if (!process.env.IMGBB_API_KEY) {
+            return res.status(500).json({ success: false, message: "Serverda API kalit topilmadi!" });
+        }
 
-        const stream = fileUpload.createWriteStream({
-            metadata: { contentType: req.file.mimetype },
-            resumable: false
-        });
+        // 1. Rasmni ImgBB formatiga tayyorlash (Base64 formatida)
+        const form = new FormData();
+        form.append('image', req.file.buffer.toString('base64'));
 
-        stream.on('error', (error) => {
-            return res.status(500).json({ success: false, message: error.message });
-        });
+        // 2. ImgBB-ga so'rov yuborish
+        const response = await axios.post(
+            `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
+            form,
+            { headers: { ...form.getHeaders() } }
+        );
 
-        stream.on('finish', async () => {
-            try {
-                await fileUpload.makePublic();
-                const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
+        if (response.data.success) {
+            const imageUrl = response.data.data.url;
 
-                const newProduct = new Product({
-                    name: req.body.name,
-                    price: req.body.price,
-                    description: req.body.description,
-                    category: req.body.category,
-                    image: imageUrl
-                });
+            // 3. MongoDB-ga mahsulotni saqlash
+            const newProduct = new Product({
+                name: req.body.name,
+                price: req.body.price,
+                description: req.body.description,
+                category: req.body.category,
+                image: imageUrl // ImgBB-dan kelgan doimiy havola
+            });
 
-                await newProduct.save();
-                res.status(201).json({ success: true, product: newProduct });
-            } catch (dbError) {
-                res.status(500).json({ success: false, message: "DB xatosi: " + dbError.message });
-            }
-        });
+            await newProduct.save();
+            res.status(201).json({ success: true, product: newProduct });
+        } else {
+            res.status(500).json({ success: false, message: "ImgBB yuklashda xatolik berdi." });
+        }
 
-        stream.end(req.file.buffer);
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Xatolik tafsiloti:", error.response ? error.response.data : error.message);
+        res.status(500).json({ success: false, message: "Rasm yuklashda xato: " + error.message });
     }
 };
 
@@ -69,33 +59,27 @@ exports.getProducts = async (req, res) => {
     }
 };
 
-// 3. Bitta mahsulotni olish
+// 3. Bitta mahsulotni ID bo'yicha olish
 exports.getSingleProduct = async (req, res) => {
     try {
         const product = await Product.findById(req.params.id);
-        if (!product) return res.status(404).json({ success: false, message: "Topilmadi" });
+        if (!product) return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
         res.status(200).json(product);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 4. O'chirish
+// 4. Mahsulotni o'chirish
 exports.deleteProduct = async (req, res) => {
     try {
-        const bucket = getBucket();
         const product = await Product.findById(req.params.id);
-        if (!product) return res.status(404).json({ success: false, message: "Topilmadi" });
+        if (!product) return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
 
-        if (product.image && bucket) {
-            const fileName = product.image.split(`${bucket.name}/`)[1];
-            if (fileName) {
-                await bucket.file(fileName).delete().catch(() => console.log("Rasm topilmadi"));
-            }
-        }
-
+        // Eslatma: ImgBB bepul API-si orqali rasmni o'chirish biroz murakkabroq, 
+        // shuning uchun hozircha faqat MongoDB-dan o'chiramiz.
         await Product.findByIdAndDelete(req.params.id);
-        res.status(200).json({ success: true, message: "O'chirildi" });
+        res.status(200).json({ success: true, message: "Mahsulot o'chirildi!" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -17,14 +17,14 @@ router.get('/:id', productController.getSingleProduct);
 
 /**
  * @route   POST /api/products/add
- * @desc    Yangi mahsulot qo'shish (Multer orqali rasm tutiladi)
+ * @desc    Yangi mahsulot qo'shish (ImgBB orqali rasm yuklanadi)
  * @access  Public
  */
 router.post('/add', upload.single('image'), productController.addProduct);
 
 /**
  * @route   DELETE /api/products/delete/:id
- * @desc    Mahsulotni o'chirish (Firebase-dagi rasmi bilan birga)
+ * @desc    Mahsulotni o'chirish
  */
 router.delete('/delete/:id', productController.deleteProduct);
 
