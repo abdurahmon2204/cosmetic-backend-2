@@ -1,40 +1,56 @@
 const Product = require('../models/Product');
 const admin = require('firebase-admin');
 
-// Firebase bucket-ni server.js-dagi ulanishdan foydalanib olamiz
-// initializeApp shart emas, chunki u server.js da bajarildi
-const getBucket = () => admin.storage().bucket();
+/**
+ * FIREBASE INITIALIZATION
+ * Render-da JWT Signature xatosi chiqmasligi uchun privateKey-ni 
+ * split/join usulida tozalab olamiz.
+ */
+if (!admin.apps.length) {
+    const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+    const formattedKey = rawKey ? rawKey.replace(/\\n/g, '\n') : undefined;
+
+    admin.initializeApp({
+        credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: formattedKey,
+        }),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+}
+
+const bucket = admin.storage().bucket();
 
 // 1. Yangi mahsulot qo'shish
 exports.addProduct = async (req, res) => {
     try {
-        const bucket = getBucket();
-
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Rasm yuklanmadi!" });
         }
 
-        // Fayl nomi: products papkasi ichiga vaqt tamg'asi bilan saqlaymiz
-        const fileName = `products/${Date.now()}_${req.file.originalname}`;
+        // Fayl nomi: products papkasiga vaqt bilan saqlash
+        const fileName = `products/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
         const fileUpload = bucket.file(fileName);
 
         const stream = fileUpload.createWriteStream({
             metadata: {
                 contentType: req.file.mimetype
-            }
+            },
+            resumable: false // Kichik fayllar uchun tezroq ishlaydi
         });
 
         stream.on('error', (error) => {
-            console.error("Firebase xatosi:", error);
+            console.error("Firebase yuklash xatosi:", error);
             return res.status(500).json({ success: false, message: "Firebase xatosi: " + error.message });
         });
 
         stream.on('finish', async () => {
             try {
-                // Rasmni hamma ko'rishi uchun ruxsat berish
+                // Rasmni ommaviy (public) qilish
                 await fileUpload.makePublic();
                 
-                // Rasmni URL manzilini yasash
+                // Rasmni URL manzilini olish
                 const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
 
                 // MongoDB-ga saqlash
@@ -50,7 +66,8 @@ exports.addProduct = async (req, res) => {
                 res.status(201).json({ success: true, product: newProduct });
 
             } catch (dbError) {
-                res.status(500).json({ success: false, message: "MongoDB saqlashda xato: " + dbError.message });
+                console.error("DB Saqlash xatosi:", dbError);
+                res.status(500).json({ success: false, message: "Ma'lumotlar bazasiga saqlashda xato!" });
             }
         });
 
@@ -71,7 +88,7 @@ exports.getProducts = async (req, res) => {
     }
 };
 
-// 3. Bitta mahsulotni ID bo'yicha olish
+// 3. Bitta mahsulotni olish
 exports.getSingleProduct = async (req, res) => {
     try {
         const product = await Product.findById(req.params.id);
@@ -87,25 +104,22 @@ exports.getSingleProduct = async (req, res) => {
 // 4. Mahsulotni o'chirish
 exports.deleteProduct = async (req, res) => {
     try {
-        const bucket = getBucket();
         const product = await Product.findById(req.params.id);
         
         if (!product) {
             return res.status(404).json({ success: false, message: "Mahsulot topilmadi" });
         }
 
-        // Firebase-dan rasmni o'chirish mantiqi
+        // Firebase-dan rasmni o'chirish
         if (product.image) {
-            // URL-dan fayl yo'lini ajratib olish
-            const parts = product.image.split(`${bucket.name}/`);
-            if (parts.length > 1) {
-                const fileName = parts[1];
-                await bucket.file(fileName).delete().catch(e => console.log("Firebase rasm topilmadi:", e.message));
+            const fileName = product.image.split(`${bucket.name}/`)[1];
+            if (fileName) {
+                await bucket.file(fileName).delete().catch(e => console.log("Firebase-da rasm allaqachon o'chgan."));
             }
         }
 
         await Product.findByIdAndDelete(req.params.id);
-        res.status(200).json({ success: true, message: "O'chirildi!" });
+        res.status(200).json({ success: true, message: "Mahsulot muvaffaqiyatli o'chirildi!" });
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
