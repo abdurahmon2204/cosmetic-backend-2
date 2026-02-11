@@ -63,12 +63,19 @@ exports.deleteProduct = async (req, res) => {
 };
 // controllers/productController.js
 
-// Funksiya nomi routes faylidagi bilan bir xil bo'lishi shart!
 exports.updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        // Yangilash kodi bu yerda bo'ladi...
-        res.status(200).json({ message: "Mahsulot yangilandi" });
+        const updatedData = req.body; // Postmandan kelayotgan yangi ma'lumotlar
+
+        // Diqqat:findByIdAndUpdate ishlatilishi shart!
+        const product = await Product.findByIdAndUpdate(id, updatedData, { new: true });
+
+        if (!product) {
+            return res.status(404).json({ message: "Mahsulot topilmadi" });
+        }
+
+        res.status(200).json({ message: "Mahsulot yangilandi", product });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
