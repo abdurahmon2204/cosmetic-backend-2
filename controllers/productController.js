@@ -61,3 +61,15 @@ exports.deleteProduct = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+// controllers/productController.js
+
+// Funksiya nomi routes faylidagi bilan bir xil bo'lishi shart!
+exports.updateProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Yangilash kodi bu yerda bo'ladi...
+        res.status(200).json({ message: "Mahsulot yangilandi" });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
